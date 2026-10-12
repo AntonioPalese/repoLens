@@ -166,6 +166,15 @@ def load_index(index_dir: Path, settings: Settings, embedder: Embedder) -> Loade
     )
 
 
+def load_chunks(index_dir: Path) -> list[Chunk]:
+    """Read only the chunks of an index (no models are loaded)."""
+    meta = read_meta(index_dir)
+    chunks = _read_chunks(IndexLayout(index_dir).chunks)
+    if len(chunks) != meta.chunk_count:
+        raise IndexLoadError(f"{index_dir} has {len(chunks)} chunks, expected {meta.chunk_count}")
+    return chunks
+
+
 def _read_chunks(path: Path) -> list[Chunk]:
     try:
         with path.open(encoding="utf-8") as lines:

@@ -31,3 +31,14 @@ class InjectionDetector(Protocol):
     def scan(self, text: str) -> list[Detection]:
         """Return all detections for ``text``; an empty list means clean."""
         ...
+
+
+class CompositeDetector:
+    """Runs several detectors and concatenates their detections."""
+
+    def __init__(self, detectors: list[InjectionDetector]) -> None:
+        self._detectors = detectors
+
+    def scan(self, text: str) -> list[Detection]:
+        """Detections of every detector, in detector order."""
+        return [d for detector in self._detectors for d in detector.scan(text)]

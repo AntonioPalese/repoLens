@@ -180,4 +180,4 @@ def test_pipeline_records_llm_usage(sample_index: Path, offline_settings: Settin
     assert result.reranked is True
     assert (tracer.tokens_in, tracer.tokens_out) == (1000, 50)
     assert tracer.cost_usd == pytest.approx(0.002)
-    assert [s.name for s in tracer.stages] == ["bm25", "dense", "fusion", "rerank"]
+    assert [s.name for s in tracer.stages] == ["bm25", "dense", "fusion", "rerank", "guard"]

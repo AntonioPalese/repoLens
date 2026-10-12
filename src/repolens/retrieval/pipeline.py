@@ -1,7 +1,7 @@
 """Search pipeline: retrieve -> (rerank) -> (guard) -> SearchResult.
 
-This module is the single place where index, embedder, retrievers and reranker
-are wired together. The injection guard (milestone 6) plugs in here.
+This module is the single place where index, embedder, retrievers, reranker and
+injection guard are wired together.
 """
 
 from __future__ import annotations
@@ -9,10 +9,22 @@ from __future__ import annotations
 import uuid
 from pathlib import Path
 
-from repolens.config import LLMJudgeSettings, RerankSettings, Settings
+from repolens.config import GuardSettings, LLMJudgeSettings, RerankSettings, Settings
 from repolens.embeddings import build_embedder
+from repolens.files import FileReader
+from repolens.guard.base import CompositeDetector, InjectionDetector
+from repolens.guard.classifier import ClassifierDetector
+from repolens.guard.heuristic import HeuristicDetector
+from repolens.guard.policy import assess, render_snippet
 from repolens.indexing.store import LoadedIndex, load_index
-from repolens.models import ScoredChunk, SearchHit, SearchMode, SearchResult
+from repolens.models import (
+    FileRange,
+    InjectionFlag,
+    ScoredChunk,
+    SearchHit,
+    SearchMode,
+    SearchResult,
+)
 from repolens.rerank.base import ReportsUsage, Reranker
 from repolens.rerank.cross_encoder import CrossEncoderReranker
 from repolens.rerank.llm_judge import LLMJudgeReranker
@@ -27,15 +39,28 @@ class SearchEngine:
     """Answers queries against one loaded index."""
 
     def __init__(
-        self, index: LoadedIndex, settings: Settings, reranker: Reranker | None = None
+        self,
+        index: LoadedIndex,
+        settings: Settings,
+        reranker: Reranker | None = None,
+        detector: InjectionDetector | None = None,
     ) -> None:
+        """Wire an engine; without ``detector`` hits are returned unguarded."""
         self._index = index
         self._settings = settings
         self._reranker = reranker
+        self._detector = detector
         self._single: dict[SearchMode, Retriever] = {
             SearchMode.BM25: index.bm25,
             SearchMode.DENSE: index.dense,
         }
+        self._files = FileReader(
+            Path(index.meta.repo_path),
+            {c.path for c in index.chunks},
+            max_lines=settings.server.read_max_lines,
+            detector=detector,
+            block_high_severity=settings.guard.block_high_severity,
+        )
         self._hybrid = HybridRetriever(
             [index.bm25, index.dense],
             candidate_k=settings.retrieval.candidate_k,
@@ -50,7 +75,7 @@ class SearchEngine:
         """
         embedder = build_embedder(settings.embedding)
         index = load_index(index_dir, settings, embedder)
-        return cls(index, settings, build_reranker(settings.rerank))
+        return cls(index, settings, build_reranker(settings.rerank), build_detector(settings.guard))
 
     @property
     def index(self) -> LoadedIndex:
@@ -87,13 +112,23 @@ class SearchEngine:
         candidates = self._first_stage(query, mode, depth, tracer)
         if reranker is not None:
             candidates = self._rerank(reranker, query, candidates, k, tracer)
+        with tracer.stage("guard") as stage:
+            hits = [self._to_hit(c) for c in candidates]
+            stage.candidates = sum(h.injection_flag is not InjectionFlag.NONE for h in hits)
         return SearchResult(
             request_id=uuid.uuid4().hex,
             query=query,
             mode=mode,
             reranked=reranker is not None,
-            hits=[self._to_hit(c) for c in candidates],
+            hits=hits,
         )
+
+    def read_file_range(self, path: str, start_line: int, end_line: int) -> FileRange:
+        """Read lines of an indexed file through the injection guard.
+
+        Raises ``FileAccessError`` for paths outside the index or invalid ranges.
+        """
+        return self._files.read(path, start_line, end_line)
 
     def _first_stage(
         self, query: str, mode: SearchMode, depth: int, tracer: Tracer
@@ -121,7 +156,11 @@ class SearchEngine:
         return reranked
 
     def _to_hit(self, scored: ScoredChunk) -> SearchHit:
+        """Build a hit; the guard scans the full chunk text, not just the snippet."""
         chunk = scored.chunk
+        detections = self._detector.scan(chunk.text) if self._detector else []
+        verdict = assess(detections, self._settings.guard.block_high_severity)
+        snippet = truncate(chunk.text, self._settings.server.snippet_max_chars)
         return SearchHit(
             path=chunk.path,
             start_line=chunk.start_line,
@@ -129,7 +168,9 @@ class SearchEngine:
             symbol=chunk.symbol,
             kind=chunk.kind,
             score=scored.score,
-            snippet=truncate(chunk.text, self._settings.server.snippet_max_chars),
+            snippet=render_snippet(snippet, verdict),
+            injection_flag=verdict.flag,
+            injection_reasons=verdict.reasons,
         )
 
 
@@ -169,6 +210,22 @@ def build_llm_judge(settings: LLMJudgeSettings) -> LLMJudgeReranker:
         price_in_per_mtok=settings.price_in_per_mtok,
         price_out_per_mtok=settings.price_out_per_mtok,
     )
+
+
+def build_detector(settings: GuardSettings) -> InjectionDetector | None:
+    """Heuristic rules, plus the classifier when enabled; None when the guard is off."""
+    if not settings.enabled:
+        return None
+    heuristic = HeuristicDetector()
+    if not settings.classifier_enabled:
+        return heuristic
+    classifier = ClassifierDetector(
+        settings.classifier_model,
+        threshold=settings.classifier_threshold,
+        label=settings.classifier_label,
+        device=settings.classifier_device,
+    )
+    return CompositeDetector([heuristic, classifier])
 
 
 def _timed_retrieve(retriever: Retriever, query: str, k: int, tracer: Tracer) -> list[ScoredChunk]:

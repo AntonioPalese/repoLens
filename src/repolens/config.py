@@ -129,12 +129,17 @@ class RerankSettings(_Section):
 
 
 class GuardSettings(_Section):
-    """Prompt-injection detection applied to returned chunks."""
+    """Prompt-injection detection applied to returned chunks (see ``repolens.guard``)."""
 
     enabled: bool = True
     classifier_enabled: bool = False
     classifier_model: str = "protectai/deberta-v3-base-prompt-injection-v2"
     classifier_threshold: float = Field(default=0.5, ge=0, le=1)
+    classifier_label: str = "INJECTION"
+    classifier_device: str = "cpu"
+    block_high_severity: bool = Field(
+        default=True, description="Replace snippets with high-severity detections."
+    )
 
 
 class ServerSettings(_Section):

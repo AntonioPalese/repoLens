@@ -124,3 +124,16 @@ class TraceRecord(BaseModel):
     llm_tokens_in: int = Field(default=0, ge=0)
     llm_tokens_out: int = Field(default=0, ge=0)
     estimated_cost_usd: float = Field(default=0.0, ge=0)
+
+
+class FileRange(BaseModel):
+    """Lines read from an indexed file, after the injection guard."""
+
+    path: str
+    start_line: int
+    end_line: int = Field(description="Last line returned (clamped to the file and the limit).")
+    total_lines: int
+    truncated: bool = Field(description="True if fewer lines than requested were returned.")
+    text: str
+    injection_flag: InjectionFlag = InjectionFlag.NONE
+    injection_reasons: list[str] = Field(default_factory=list)

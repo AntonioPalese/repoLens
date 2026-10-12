@@ -149,7 +149,7 @@ class TestRunner:
         bm25 = by_name["bm25"]
         assert bm25.metrics["recall@1"] >= 0.5  # q1 is an exact identifier
         assert bm25.questions[0].gold_ranks == [1]
-        assert set(by_name["hybrid"].latency) == {"bm25", "dense", "fusion", "total"}
+        assert set(by_name["hybrid"].latency) == {"bm25", "dense", "fusion", "guard", "total"}
         assert set(bm25.by_tag) == {"concept", "symbol"}
         assert by_name["hybrid+ce"].reranker_model == "cross-encoder/ms-marco-MiniLM-L-6-v2"
         assert report.warnings and "differs" in report.warnings[0]

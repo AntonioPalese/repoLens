@@ -9,20 +9,30 @@ from typing import Annotated, NoReturn
 
 import typer
 from pydantic import ValidationError
-from rich.console import Console
+from rich.console import Console, Group
 from rich.logging import RichHandler
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
 
 from repolens import __version__
 from repolens.config import Settings, load_settings
 from repolens.embeddings import build_embedder
 from repolens.evals.dataset import DatasetError, load_meta, load_questions
+from repolens.evals.guard import (
+    load_examples,
+    markdown_guard_report,
+    run_guard_eval,
+    write_guard_report,
+)
 from repolens.evals.run import EvalError, markdown_report, run_eval, select_configs, write_report
+from repolens.guard.base import CompositeDetector, InjectionDetector
+from repolens.guard.classifier import ClassifierDetector
+from repolens.guard.heuristic import HeuristicDetector
 from repolens.indexing.indexer import IndexBuildError, build_index
-from repolens.indexing.store import IndexLoadError, IndexMeta, load_index
-from repolens.models import SearchHit, SearchMode, SearchResult
+from repolens.indexing.store import IndexLoadError, IndexMeta, load_chunks, load_index
+from repolens.models import InjectionFlag, SearchHit, SearchMode, SearchResult
 from repolens.retrieval.pipeline import SearchEngine
 
 app = typer.Typer(
@@ -182,6 +192,61 @@ def eval_(
     print(markdown_report(report))
 
 
+@app.command("eval-guard")
+def eval_guard(
+    dataset: Annotated[
+        Path,
+        typer.Option("--dataset", help="Labelled injection JSONL.", exists=True, dir_okay=False),
+    ] = Path("evals/datasets/injection.jsonl"),
+    index_dir: Annotated[
+        Path | None,
+        typer.Option("--index", help="Also scan this (trusted) index for false positives."),
+    ] = None,
+    classifier: Annotated[
+        bool, typer.Option("--classifier", help="Also evaluate the HF classifier (downloads it).")
+    ] = False,
+    out: Annotated[
+        Path, typer.Option("--out", help="Directory for the JSON report.", file_okay=False)
+    ] = Path("evals/results"),
+    config: ConfigOption = None,
+) -> None:
+    """Measure the prompt-injection guard and print a markdown table."""
+    settings = _settings(config)
+    try:
+        examples = load_examples(dataset)
+        corpus = load_chunks(index_dir) if index_dir else None
+    except (DatasetError, IndexLoadError) as exc:
+        _fail(str(exc))
+    report = run_guard_eval(
+        examples,
+        _guard_configs(settings, classifier),
+        dataset,
+        corpus,
+        settings.guard.block_high_severity,
+    )
+    err_console.print(f"Report written to {write_guard_report(report, out)}")
+    print(markdown_guard_report(report))
+
+
+def _guard_configs(settings: Settings, with_classifier: bool) -> dict[str, InjectionDetector | str]:
+    heuristic = HeuristicDetector()
+    if not with_classifier:
+        reason = "pass --classifier to download and run it"
+        return {"heuristic": heuristic, "classifier": reason, "heuristic+classifier": reason}
+    guard = settings.guard
+    model = ClassifierDetector(
+        guard.classifier_model,
+        threshold=guard.classifier_threshold,
+        label=guard.classifier_label,
+        device=guard.classifier_device,
+    )
+    return {
+        "heuristic": heuristic,
+        "classifier": model,
+        "heuristic+classifier": CompositeDetector([heuristic, model]),
+    }
+
+
 def _print_index_summary(meta: IndexMeta, out: Path, seconds: float) -> None:
     table = Table(show_header=False, box=None)
     table.add_row("Index", str(out))
@@ -210,4 +275,18 @@ def _hit_panel(rank: int, hit: SearchHit) -> Panel:
     lexer = Syntax.guess_lexer(hit.path, code=hit.snippet)
     body = Syntax(hit.snippet, lexer, line_numbers=True, start_line=hit.start_line)
     subtitle = f"{hit.kind.value} · score {hit.score:.4f}"
-    return Panel(body, title=title, title_align="left", subtitle=subtitle, subtitle_align="right")
+    if hit.injection_flag is InjectionFlag.NONE:
+        return Panel(
+            body, title=title, title_align="left", subtitle=subtitle, subtitle_align="right"
+        )
+    colour = "red" if hit.injection_flag is InjectionFlag.BLOCKED else "yellow"
+    title += f"  [{colour}]⚠ {hit.injection_flag.value}[/{colour}]"
+    reasons = Text("\n".join(f"• {r}" for r in hit.injection_reasons), style=colour)
+    return Panel(
+        Group(reasons, Text(""), body),
+        title=title,
+        title_align="left",
+        subtitle=subtitle,
+        subtitle_align="right",
+        border_style=colour,
+    )

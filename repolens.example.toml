@@ -52,6 +52,9 @@ enabled = true
 classifier_enabled = false
 classifier_model = "protectai/deberta-v3-base-prompt-injection-v2"
 classifier_threshold = 0.5
+classifier_label = "INJECTION"
+classifier_device = "cpu"
+block_high_severity = true   # false: high-severity hits are only marked "suspected"
 
 [server]
 snippet_max_chars = 1200
