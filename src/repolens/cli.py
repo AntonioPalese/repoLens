@@ -18,8 +18,10 @@ from rich.table import Table
 from repolens import __version__
 from repolens.config import Settings, load_settings
 from repolens.embeddings import build_embedder
+from repolens.evals.dataset import DatasetError, load_meta, load_questions
+from repolens.evals.run import EvalError, markdown_report, run_eval, select_configs, write_report
 from repolens.indexing.indexer import IndexBuildError, build_index
-from repolens.indexing.store import IndexLoadError, IndexMeta
+from repolens.indexing.store import IndexLoadError, IndexMeta, load_index
 from repolens.models import SearchHit, SearchMode, SearchResult
 from repolens.retrieval.pipeline import SearchEngine
 
@@ -125,7 +127,7 @@ def query(
     try:
         engine = SearchEngine.open(index_dir, settings)
         result = engine.search(question, k=k, mode=mode, rerank=rerank)
-    except (IndexLoadError, NotImplementedError) as exc:
+    except (IndexLoadError, ValueError) as exc:
         _fail(str(exc))
     _print_result(result)
 
@@ -149,13 +151,29 @@ def eval_(
         Path, typer.Option("--dataset", help="JSONL benchmark file.", exists=True, dir_okay=False)
     ],
     configs: Annotated[
-        str, typer.Option(help="Comma-separated pipeline configs to run, or 'all'.")
+        str,
+        typer.Option(
+            help="Comma-separated configs (bm25,dense,hybrid,hybrid+ce,hybrid+llm) or 'all'."
+        ),
     ] = "all",
+    out: Annotated[
+        Path, typer.Option("--out", help="Directory for the JSON report.", file_okay=False)
+    ] = Path("evals/results"),
     config: ConfigOption = None,
 ) -> None:
-    """Run the retrieval benchmark and print a results table."""
-    _settings(config)
-    _not_implemented("eval", milestone=5)
+    """Run the retrieval benchmark and print a markdown results table."""
+    settings = _settings(config)
+    try:
+        selected = select_configs(configs)
+        questions = load_questions(dataset)
+        index = load_index(index_dir, settings, build_embedder(settings.embedding))
+        report = run_eval(index, questions, settings, selected, dataset, load_meta(dataset))
+    except (EvalError, DatasetError, IndexLoadError, ValueError) as exc:
+        _fail(str(exc))
+    for warning in report.warnings:
+        err_console.print(f"[yellow]Warning:[/yellow] {warning}")
+    err_console.print(f"Report written to {write_report(report, out)}")
+    print(markdown_report(report))
 
 
 def _print_index_summary(meta: IndexMeta, out: Path, seconds: float) -> None:

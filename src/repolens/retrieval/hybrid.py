@@ -50,11 +50,23 @@ class HybridRetriever:
         """Retriever identifier."""
         return "hybrid"
 
-    def retrieve(self, query: str, k: int) -> list[ScoredChunk]:
-        """Fuse the top ``max(candidate_k, k)`` of every retriever; return the best ``k``."""
-        depth = max(self._candidate_k, k)
-        rankings = [retriever.retrieve(query, depth) for retriever in self._retrievers]
+    @property
+    def retrievers(self) -> list[Retriever]:
+        """The fused retrievers (the pipeline times them individually)."""
+        return list(self._retrievers)
+
+    def depth(self, k: int) -> int:
+        """How many candidates to request from each retriever for a top-``k`` result."""
+        return max(self._candidate_k, k)
+
+    def fuse(self, rankings: Sequence[Sequence[ScoredChunk]], k: int) -> list[ScoredChunk]:
+        """Fuse per-retriever rankings and keep the best ``k``."""
         return reciprocal_rank_fusion(rankings, self._rrf_k)[:k]
+
+    def retrieve(self, query: str, k: int) -> list[ScoredChunk]:
+        """Fuse the top ``depth(k)`` of every retriever; return the best ``k``."""
+        rankings = [retriever.retrieve(query, self.depth(k)) for retriever in self._retrievers]
+        return self.fuse(rankings, k)
 
 
 def _position(chunk: Chunk) -> tuple[str, int, int, str]:

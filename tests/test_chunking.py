@@ -246,3 +246,15 @@ def _assert_covers_non_blank_lines(chunks: list[Chunk], source: str) -> None:
     covered = {line for c in chunks for line in range(c.start_line, c.end_line + 1)}
     non_blank = {i for i, line in enumerate(source.split("\n"), start=1) if line.strip()}
     assert non_blank <= covered, f"uncovered lines: {sorted(non_blank - covered)}"
+
+
+def test_chunks_real_world_sources(chunker: PythonChunker) -> None:
+    # Regression: tree-sitter 0.26.0 corrupted memory (segfault) on ordinary
+    # mid-size files that the tiny fixtures never triggered. Chunk our own package.
+    package = Path(__file__).parents[1] / "src" / "repolens"
+    files = sorted(package.rglob("*.py"))
+
+    for file in files:
+        source = file.read_text()
+        _assert_covers_non_blank_lines(chunker.chunk(file.name, source), source)
+    assert len(files) > 20

@@ -95,6 +95,7 @@ class LLMJudgeSettings(_Section):
     model: str | None = None
     api_key: SecretStr | None = None
     timeout_s: float = Field(default=30.0, gt=0)
+    max_chars_per_candidate: int = Field(default=1500, gt=0)
     price_in_per_mtok: float = Field(default=0.0, ge=0, description="USD per 1M input tokens.")
     price_out_per_mtok: float = Field(default=0.0, ge=0, description="USD per 1M output tokens.")
 

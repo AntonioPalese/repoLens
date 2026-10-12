@@ -107,10 +107,6 @@ class TestBuildReranker:
         assert isinstance(built, CrossEncoderReranker)
         assert built.model_name == "some/model"
 
-    def test_llm_judge_not_available_yet(self) -> None:
-        with pytest.raises(NotImplementedError):
-            build_reranker(RerankSettings(backend="llm_judge"))
-
 
 class TestPipelineReranking:
     @pytest.fixture

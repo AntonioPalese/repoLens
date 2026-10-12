@@ -42,6 +42,7 @@ batch_size = 32
 # model = "qwen2.5-coder:7b"
 # api_key = "..."                          # prefer REPOLENS_RERANK__LLM_JUDGE__API_KEY
 timeout_s = 30.0
+max_chars_per_candidate = 1500
 price_in_per_mtok = 0.0
 price_out_per_mtok = 0.0
 
