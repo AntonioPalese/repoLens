@@ -32,7 +32,9 @@ hnsw_ef_search = 64
 [rerank]
 backend = "cross_encoder"   # "cross_encoder" | "llm_judge" | "none"
 cross_encoder_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-top_n = 30
+top_n = 30           # first-stage candidates passed to the reranker
+device = "cpu"
+batch_size = 32
 
 # Opt-in: sends retrieved code to this endpoint. Leave unset to keep everything local.
 [rerank.llm_judge]

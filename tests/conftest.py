@@ -35,21 +35,21 @@ def sample_repo() -> Path:
 
 
 @pytest.fixture
-def hashing_settings() -> Settings:
-    """Settings using the offline hashing embedder (no model downloads)."""
-    return Settings(embedding={"backend": "hashing"})
+def offline_settings() -> Settings:
+    """Hashing embedder and no reranker: nothing is downloaded."""
+    return Settings(embedding={"backend": "hashing"}, rerank={"backend": "none"})
 
 
 @pytest.fixture
-def sample_chunks(hashing_settings: Settings) -> list[Chunk]:
+def sample_chunks(offline_settings: Settings) -> list[Chunk]:
     """All chunks of the fixture repository, in index order."""
-    files = discover_files(SAMPLE_REPO, hashing_settings.indexing)
-    return collect_chunks(SAMPLE_REPO, files, default_chunkers(hashing_settings), 1_000_000)
+    files = discover_files(SAMPLE_REPO, offline_settings.indexing)
+    return collect_chunks(SAMPLE_REPO, files, default_chunkers(offline_settings), 1_000_000)
 
 
 @pytest.fixture
-def sample_index(tmp_path: Path, hashing_settings: Settings) -> Path:
+def sample_index(tmp_path: Path, offline_settings: Settings) -> Path:
     """A hashing-embedder index of the fixture repository."""
     out = tmp_path / "index"
-    build_index(SAMPLE_REPO, out, hashing_settings, build_embedder(hashing_settings.embedding))
+    build_index(SAMPLE_REPO, out, offline_settings, build_embedder(offline_settings.embedding))
     return out

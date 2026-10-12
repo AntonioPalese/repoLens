@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from repolens.config import EmbeddingSettings, Settings
+from repolens.config import EmbeddingSettings, ServerSettings, Settings
 from repolens.embeddings import (
     HashingEmbedder,
     SentenceTransformerEmbedder,
@@ -161,8 +161,8 @@ class TestEmbedders:
 
 
 class TestSearchEngine:
-    def test_bm25_search_returns_hits(self, sample_index: Path, hashing_settings: Settings) -> None:
-        engine = SearchEngine.open(sample_index, hashing_settings)
+    def test_bm25_search_returns_hits(self, sample_index: Path, offline_settings: Settings) -> None:
+        engine = SearchEngine.open(sample_index, offline_settings)
 
         result = engine.search("parseAuthHeader", k=2, mode=SearchMode.BM25)
 
@@ -172,8 +172,10 @@ class TestSearchEngine:
         assert result.reranked is False
         assert len(result.request_id) == 32
 
-    def test_snippets_are_truncated(self, sample_index: Path) -> None:
-        settings = Settings(embedding={"backend": "hashing"}, server={"snippet_max_chars": 40})
+    def test_snippets_are_truncated(self, sample_index: Path, offline_settings: Settings) -> None:
+        settings = offline_settings.model_copy(
+            update={"server": ServerSettings(snippet_max_chars=40)}
+        )
         engine = SearchEngine.open(sample_index, settings)
 
         hit = engine.search("build_url attempt", k=1, mode=SearchMode.BM25).hits[0]
@@ -181,13 +183,11 @@ class TestSearchEngine:
         assert len(hit.snippet) <= 40
         assert hit.snippet.endswith(TRUNCATION_MARKER)
 
-    def test_rejects_bad_requests(self, sample_index: Path, hashing_settings: Settings) -> None:
-        engine = SearchEngine.open(sample_index, hashing_settings)
+    def test_rejects_bad_requests(self, sample_index: Path, offline_settings: Settings) -> None:
+        engine = SearchEngine.open(sample_index, offline_settings)
 
         with pytest.raises(ValueError, match="k must be"):
             engine.search("q", k=0, mode=SearchMode.BM25)
-        with pytest.raises(NotImplementedError):
-            engine.search("q", mode=SearchMode.HYBRID)
 
 
 def test_truncate_keeps_short_text() -> None:

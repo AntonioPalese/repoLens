@@ -110,6 +110,8 @@ class RerankSettings(_Section):
     backend: Literal["cross_encoder", "llm_judge", "none"] = "cross_encoder"
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     top_n: int = Field(default=30, gt=0, description="How many fused candidates to rerank.")
+    device: str = "cpu"
+    batch_size: int = Field(default=32, gt=0)
     llm_judge: LLMJudgeSettings = Field(default_factory=LLMJudgeSettings)
 
 

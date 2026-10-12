@@ -46,12 +46,11 @@ def test_index_then_query(
     tmp_path: Path, sample_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("REPOLENS_EMBEDDING__BACKEND", "hashing")
+    monkeypatch.setenv("REPOLENS_RERANK__BACKEND", "none")
     out = tmp_path / "idx"
 
     indexed = runner.invoke(app, ["index", str(sample_repo), "--out", str(out)])
-    queried = runner.invoke(
-        app, ["query", str(out), "parseAuthHeader", "--mode", "bm25", "--k", "1"]
-    )
+    queried = runner.invoke(app, ["query", str(out), "parseAuthHeader", "--k", "1"])
 
     assert indexed.exit_code == 0, indexed.output
     assert "Index built" in indexed.stdout

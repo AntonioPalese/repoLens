@@ -112,31 +112,31 @@ def test_build_index_writes_complete_layout(sample_index: Path) -> None:
     assert not list(sample_index.parent.glob(".index.*"))  # no staging leftovers
 
 
-def test_load_index_round_trip(sample_index: Path, hashing_settings: Settings) -> None:
-    loaded = load_index(sample_index, hashing_settings, HashingEmbedder())
+def test_load_index_round_trip(sample_index: Path, offline_settings: Settings) -> None:
+    loaded = load_index(sample_index, offline_settings, HashingEmbedder())
 
     assert len(loaded.chunks) == loaded.meta.chunk_count
     assert loaded.bm25.retrieve("parseAuthHeader", 1)[0].chunk.symbol == "parseAuthHeader"
 
 
 def test_build_index_rejects_repo_without_sources(
-    tmp_path: Path, hashing_settings: Settings
+    tmp_path: Path, offline_settings: Settings
 ) -> None:
     _write(tmp_path / "repo", "README.md", "# nothing to index")
 
     with pytest.raises(IndexBuildError, match="No indexable"):
-        build_index(tmp_path / "repo", tmp_path / "out", hashing_settings, HashingEmbedder())
+        build_index(tmp_path / "repo", tmp_path / "out", offline_settings, HashingEmbedder())
 
 
 def test_rebuild_replaces_index_but_keeps_traces(
-    sample_repo: Path, sample_index: Path, hashing_settings: Settings
+    sample_repo: Path, sample_index: Path, offline_settings: Settings
 ) -> None:
     traces = IndexLayout(sample_index).traces_dir
     traces.mkdir()
     (traces / "t.jsonl").write_text("{}\n")
     first = read_meta(sample_index).created_at
 
-    build_index(sample_repo, sample_index, hashing_settings, HashingEmbedder())
+    build_index(sample_repo, sample_index, offline_settings, HashingEmbedder())
 
     assert read_meta(sample_index).created_at > first
     assert (traces / "t.jsonl").read_text() == "{}\n"
@@ -144,26 +144,26 @@ def test_rebuild_replaces_index_but_keeps_traces(
 
 
 def test_refuses_to_overwrite_unrelated_directory(
-    tmp_path: Path, sample_repo: Path, hashing_settings: Settings
+    tmp_path: Path, sample_repo: Path, offline_settings: Settings
 ) -> None:
     out = tmp_path / "out"
     _write(out, "important.txt")
 
     with pytest.raises(FileExistsError):
-        build_index(sample_repo, out, hashing_settings, HashingEmbedder())
+        build_index(sample_repo, out, offline_settings, HashingEmbedder())
     assert (out / "important.txt").exists()
 
 
-def test_load_missing_index(tmp_path: Path, hashing_settings: Settings) -> None:
+def test_load_missing_index(tmp_path: Path, offline_settings: Settings) -> None:
     with pytest.raises(IndexLoadError, match="No index found"):
-        load_index(tmp_path / "missing", hashing_settings, HashingEmbedder())
+        load_index(tmp_path / "missing", offline_settings, HashingEmbedder())
 
 
 def test_load_rejects_different_embedding_model(
-    sample_index: Path, hashing_settings: Settings
+    sample_index: Path, offline_settings: Settings
 ) -> None:
     with pytest.raises(IndexLoadError, match=r"hashing:256.*hashing:64"):
-        load_index(sample_index, hashing_settings, HashingEmbedder(dim=64))
+        load_index(sample_index, offline_settings, HashingEmbedder(dim=64))
 
 
 @pytest.mark.parametrize(
@@ -176,7 +176,7 @@ def test_load_rejects_different_embedding_model(
     ],
 )
 def test_load_rejects_incompatible_meta(
-    sample_index: Path, hashing_settings: Settings, field: str, value: object, message: str
+    sample_index: Path, offline_settings: Settings, field: str, value: object, message: str
 ) -> None:
     meta_path = IndexLayout(sample_index).meta
     meta = json.loads(meta_path.read_text())
@@ -184,4 +184,4 @@ def test_load_rejects_incompatible_meta(
     meta_path.write_text(json.dumps(meta))
 
     with pytest.raises(IndexLoadError, match=message):
-        load_index(sample_index, hashing_settings, HashingEmbedder())
+        load_index(sample_index, offline_settings, HashingEmbedder())
