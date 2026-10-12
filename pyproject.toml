@@ -1,0 +1,89 @@
+[project]
+name = "repolens"
+version = "0.1.0.dev0"
+description = "MCP server for codebase exploration with hybrid retrieval, reranking and a prompt-injection guard."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Antonio Palese" }]
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.7",
+    "pydantic-settings>=2.4",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.scripts]
+repolens = "repolens.cli:app"
+
+[dependency-groups]
+dev = [
+    "mypy>=1.11",
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/repolens"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "evals"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "RUF",     # ruff-specific
+    "PTH",     # prefer pathlib
+    "T20",     # no print
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The CLI and eval scripts are the only places allowed to write to stdout directly.
+"src/repolens/cli.py" = ["T20"]
+"evals/**" = ["T20"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--import-mode=importlib"]
+markers = [
+    "slow: needs real ML models or network; excluded in CI (-m 'not slow').",
+]
+
+[tool.coverage.run]
+source = ["repolens"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

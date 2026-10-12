@@ -1,0 +1,53 @@
+# Example repoLens configuration. Copy to ./repolens.toml or pass --config.
+# Every key is optional; environment variables (REPOLENS_<SECTION>__<KEY>) win over this file.
+
+seed = 42
+log_level = "INFO"
+
+[indexing]
+include = ["**/*.py"]
+exclude = [".git/**", "**/.venv/**", "**/venv/**", "**/node_modules/**", "**/__pycache__/**", "**/build/**", "**/dist/**"]
+max_file_bytes = 1_000_000
+
+[chunking]
+max_chunk_lines = 200
+
+[embedding]
+model_name = "BAAI/bge-small-en-v1.5"   # changing this requires a re-index
+batch_size = 32
+device = "cpu"
+
+[retrieval]
+candidate_k = 50     # candidates per retriever before fusion
+rrf_k = 60           # Reciprocal Rank Fusion constant
+hnsw_m = 32
+hnsw_ef_construction = 200
+hnsw_ef_search = 64
+
+[rerank]
+backend = "cross_encoder"   # "cross_encoder" | "llm_judge" | "none"
+cross_encoder_model = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+top_n = 30
+
+# Opt-in: sends retrieved code to this endpoint. Leave unset to keep everything local.
+[rerank.llm_judge]
+# base_url = "http://localhost:11434/v1"   # e.g. Ollama or vLLM
+# model = "qwen2.5-coder:7b"
+# api_key = "..."                          # prefer REPOLENS_RERANK__LLM_JUDGE__API_KEY
+timeout_s = 30.0
+price_in_per_mtok = 0.0
+price_out_per_mtok = 0.0
+
+[guard]
+enabled = true
+classifier_enabled = false
+classifier_model = "protectai/deberta-v3-base-prompt-injection-v2"
+classifier_threshold = 0.5
+
+[server]
+snippet_max_chars = 1200
+read_max_lines = 400
+
+[tracing]
+enabled = true
+dir_name = "traces"
