@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from typing import Protocol
 
 from repolens.models import Chunk
@@ -22,3 +23,9 @@ class Chunker(Protocol):
     def chunk(self, path: str, source: str) -> list[Chunk]:
         """Split ``source`` (the content of repo-relative ``path``) into chunks."""
         ...
+
+
+def make_chunk_id(path: str, start_line: int, end_line: int, kind: str, symbol: str | None) -> str:
+    """Return a stable id for a chunk, identical across re-indexing of unchanged code."""
+    key = "\0".join((path, str(start_line), str(end_line), kind, symbol or ""))
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:16]

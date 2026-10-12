@@ -17,3 +17,13 @@ def _isolated_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Itera
             monkeypatch.delenv(name)
     monkeypatch.chdir(tmp_path)
     yield
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
+SAMPLE_REPO = FIXTURES / "sample_repo"
+
+
+@pytest.fixture
+def sample_repo() -> Path:
+    """Path to the tiny fixture repository."""
+    return SAMPLE_REPO
