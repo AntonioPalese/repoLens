@@ -60,17 +60,28 @@ class ChunkingSettings(_Section):
 
 
 class EmbeddingSettings(_Section):
-    """Dense embedding model. Changing ``model_name`` requires a re-index."""
+    """Dense embedding model. Changing the backend or model requires a re-index.
 
+    The ``hashing`` backend is a dependency-free feature-hashing embedder: useless for
+    semantic search, but deterministic and instant, so it is used for tests and offline
+    smoke runs.
+    """
+
+    backend: Literal["sentence_transformers", "hashing"] = "sentence_transformers"
     model_name: str = "BAAI/bge-small-en-v1.5"
+    # bge models expect this instruction on queries (not on documents).
+    query_prefix: str = "Represent this sentence for searching relevant passages: "
     batch_size: int = Field(default=32, gt=0)
     device: str = "cpu"
+    hashing_dim: int = Field(default=256, gt=0)
 
 
 class RetrievalSettings(_Section):
     """First-stage retrieval and fusion parameters."""
 
     candidate_k: int = Field(default=50, gt=0, description="Candidates per retriever.")
+    bm25_k1: float = Field(default=1.5, ge=0)
+    bm25_b: float = Field(default=0.75, ge=0, le=1)
     rrf_k: int = Field(default=60, gt=0, description="RRF damping constant.")
     hnsw_m: int = Field(default=32, gt=0)
     hnsw_ef_construction: int = Field(default=200, gt=0)

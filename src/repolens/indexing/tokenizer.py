@@ -12,6 +12,9 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+# Bump whenever tokenization output changes: persisted BM25 indexes depend on it.
+TOKENIZER_VERSION = "code-v1"
+
 # A word: starts with a Unicode letter or underscore, continues with word chars.
 _WORD_RE = re.compile(r"[^\W\d]\w*")
 # Sub-words inside an identifier: acronyms before a capitalised word (HTTP|Client),

@@ -15,9 +15,14 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "bm25s>=0.2",
+    "faiss-cpu>=1.8",
+    "numpy>=1.26",
     "pydantic>=2.7",
     "pydantic-settings>=2.4",
     "rich>=13.7",
+    "sentence-transformers>=3.0",
+    "torch>=2.3",
     "tree-sitter>=0.23",
     "tree-sitter-python>=0.23",
     "typer>=0.12",
@@ -72,6 +77,10 @@ strict = true
 files = ["src"]
 plugins = ["pydantic.mypy"]
 
+[[tool.mypy.overrides]]
+module = ["bm25s", "bm25s.*"]
+ignore_missing_imports = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true
@@ -91,3 +100,12 @@ branch = true
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
+
+# CPU-only torch keeps `uv sync`, CI and the Docker image small (the default Linux wheel ships CUDA).
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

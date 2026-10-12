@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from pathlib import Path
 from typing import Annotated, NoReturn
 
@@ -10,10 +11,17 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.panel import Panel
+from rich.syntax import Syntax
+from rich.table import Table
 
 from repolens import __version__
 from repolens.config import Settings, load_settings
-from repolens.models import SearchMode
+from repolens.embeddings import build_embedder
+from repolens.indexing.indexer import IndexBuildError, build_index
+from repolens.indexing.store import IndexLoadError, IndexMeta
+from repolens.models import SearchHit, SearchMode, SearchResult
+from repolens.retrieval.pipeline import SearchEngine
 
 app = typer.Typer(
     name="repolens",
@@ -21,6 +29,9 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+# Third-party loggers that are chatty at INFO/DEBUG; shown only with --verbose.
+_NOISY_LOGGERS = ("bm25s", "sentence_transformers", "transformers", "httpx", "huggingface_hub")
+console = Console()
 err_console = Console(stderr=True)
 
 ConfigOption = Annotated[
@@ -52,6 +63,9 @@ def main(
         format="%(message)s",
         handlers=[RichHandler(console=err_console, show_path=False)],
     )
+    if not verbose:
+        for noisy in _NOISY_LOGGERS:
+            logging.getLogger(noisy).setLevel(logging.WARNING)
 
 
 def _settings(config: Path | None) -> Settings:
@@ -61,6 +75,11 @@ def _settings(config: Path | None) -> Settings:
     except (FileNotFoundError, ValidationError) as exc:
         err_console.print(f"[red]Invalid configuration:[/red] {exc}")
         raise typer.Exit(code=2) from exc
+
+
+def _fail(message: str, code: int = 2) -> NoReturn:
+    err_console.print(f"[red]Error:[/red] {message}")
+    raise typer.Exit(code=code)
 
 
 def _not_implemented(command: str, milestone: int) -> NoReturn:
@@ -83,8 +102,13 @@ def index(
     config: ConfigOption = None,
 ) -> None:
     """Chunk a repository and build the BM25 and vector indexes."""
-    _settings(config)
-    _not_implemented("index", milestone=3)
+    settings = _settings(config)
+    started = time.perf_counter()
+    try:
+        meta = build_index(repo_path, out, settings, build_embedder(settings.embedding))
+    except (IndexBuildError, FileExistsError) as exc:
+        _fail(str(exc))
+    _print_index_summary(meta, out, time.perf_counter() - started)
 
 
 @app.command()
@@ -97,8 +121,13 @@ def query(
     config: ConfigOption = None,
 ) -> None:
     """Search an index and pretty-print the results."""
-    _settings(config)
-    _not_implemented("query", milestone=3)
+    settings = _settings(config)
+    try:
+        engine = SearchEngine.open(index_dir, settings)
+        result = engine.search(question, k=k, mode=mode, rerank=rerank)
+    except (IndexLoadError, NotImplementedError) as exc:
+        _fail(str(exc))
+    _print_result(result)
 
 
 @app.command()
@@ -127,3 +156,34 @@ def eval_(
     """Run the retrieval benchmark and print a results table."""
     _settings(config)
     _not_implemented("eval", milestone=5)
+
+
+def _print_index_summary(meta: IndexMeta, out: Path, seconds: float) -> None:
+    table = Table(show_header=False, box=None)
+    table.add_row("Index", str(out))
+    table.add_row("Repository", meta.repo_path)
+    table.add_row("Commit", meta.commit or "(not a git repository)")
+    table.add_row("Files / chunks", f"{meta.file_count} / {meta.chunk_count}")
+    table.add_row("Embedding model", f"{meta.embedding_model} (dim {meta.embedding_dim})")
+    table.add_row("Took", f"{seconds:.1f}s")
+    console.print(Panel(table, title="[green]Index built[/green]", expand=False))
+
+
+def _print_result(result: SearchResult) -> None:
+    if not result.hits:
+        console.print(f"No results for [bold]{result.query}[/bold] ({result.mode.value}).")
+        return
+    reranked = ", reranked" if result.reranked else ""
+    console.print(f"[bold]{result.query}[/bold]  ({result.mode.value}{reranked})\n")
+    for rank, hit in enumerate(result.hits, start=1):
+        console.print(_hit_panel(rank, hit))
+
+
+def _hit_panel(rank: int, hit: SearchHit) -> Panel:
+    title = f"#{rank} [cyan]{hit.path}[/cyan]:{hit.start_line}-{hit.end_line}"
+    if hit.symbol:
+        title += f"  [bold]{hit.symbol}[/bold]"
+    lexer = Syntax.guess_lexer(hit.path, code=hit.snippet)
+    body = Syntax(hit.snippet, lexer, line_numbers=True, start_line=hit.start_line)
+    subtitle = f"{hit.kind.value} · score {hit.score:.4f}"
+    return Panel(body, title=title, title_align="left", subtitle=subtitle, subtitle_align="right")
