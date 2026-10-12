@@ -23,7 +23,7 @@ uv run repolens index path/to/repo --out .repolens/myrepo
 
 # Search it
 uv run repolens query .repolens/myrepo "where are HTTP retries configured?"
-uv run repolens query .repolens/myrepo "Client.send" --mode bm25 --k 3 --no-rerank
+uv run repolens query .repolens/myrepo "Client.send" --mode bm25 --k 3
 ```
 
 Models are downloaded from Hugging Face on first use and then cached. Everything
@@ -37,12 +37,38 @@ a remote endpoint, and only when you configure one.
 2. **Retrieval:** BM25 over code-aware tokens (`HTTPClientError` → `http client
    error`) and dense search (FAISS HNSW over `BAAI/bge-small-en-v1.5` embeddings),
    fused with Reciprocal Rank Fusion.
-3. **Reranking (optional):** a local cross-encoder, or an LLM judge on any
-   OpenAI-compatible endpoint (vLLM, Ollama, …).
+3. **Reranking (optional, off by default):** an LLM judge on any OpenAI-compatible
+   endpoint (vLLM, Ollama, …), or a local cross-encoder.
 
-Search modes: `hybrid` (default), `bm25`, `dense`. Configuration lives in
-`repolens.toml` (see [`repolens.example.toml`](repolens.example.toml)) or in
-`REPOLENS_*` environment variables.
+Search modes: `dense` (default), `hybrid`, `bm25`. The defaults follow the
+[evaluation](#evaluation): dense retrieval without reranking is the best *fast*
+configuration. Configuration lives in `repolens.toml` (see
+[`repolens.example.toml`](repolens.example.toml)) or in `REPOLENS_*` environment variables.
+
+### Quality mode: LLM judge
+
+If you have an OpenAI-compatible model server, hybrid retrieval plus the LLM judge
+ranks much better (MRR@10 0.894 vs 0.733 on the benchmark), at the cost of one LLM
+call per query: ~36 s with a local Qwen model on a DGX Spark. It is opt-in, because it sends
+the retrieved code to that endpoint:
+
+```toml
+# repolens.toml
+[retrieval]
+default_mode = "hybrid"
+
+[rerank]
+backend = "llm_judge"
+top_n = 30                       # candidates the judge scores per query
+
+[rerank.llm_judge]
+base_url = "http://localhost:8000/v1"
+model = "your-model-id"
+timeout_s = 180
+# api_key: set REPOLENS_RERANK__LLM_JUDGE__API_KEY instead of writing it here
+```
+
+Use `--no-rerank` to skip the judge for a single query.
 
 ## Evaluation
 

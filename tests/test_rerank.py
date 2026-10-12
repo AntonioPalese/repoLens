@@ -88,7 +88,7 @@ class TestCrossEncoderReranker:
 
     @pytest.mark.slow
     def test_real_model_prefers_relevant_code(self) -> None:
-        reranker = build_reranker(RerankSettings())
+        reranker = build_reranker(RerankSettings(backend="cross_encoder"))
         assert reranker is not None
         candidates = [
             _candidate("parse_csv", "def parse_csv(path): return list(csv.reader(open(path)))"),
@@ -103,7 +103,10 @@ class TestCrossEncoderReranker:
 class TestBuildReranker:
     def test_backends(self) -> None:
         assert build_reranker(RerankSettings(backend="none")) is None
-        built = build_reranker(RerankSettings(cross_encoder_model="some/model"))
+        assert build_reranker(RerankSettings()) is None  # off by default
+        built = build_reranker(
+            RerankSettings(backend="cross_encoder", cross_encoder_model="some/model")
+        )
         assert isinstance(built, CrossEncoderReranker)
         assert built.model_name == "some/model"
 
@@ -123,7 +126,7 @@ class TestPipelineReranking:
     ) -> None:
         engine, reranker = engine_and_reranker
 
-        result = engine.search("client retry", k=2)
+        result = engine.search("client retry", k=2, mode=SearchMode.HYBRID)
 
         assert reranker.received == [6]
         assert result.reranked is True

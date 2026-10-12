@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from repolens.config import EmbeddingSettings, ServerSettings, Settings
+from repolens.config import EmbeddingSettings, RetrievalSettings, ServerSettings, Settings
 from repolens.embeddings import (
     HashingEmbedder,
     SentenceTransformerEmbedder,
@@ -182,6 +182,19 @@ class TestSearchEngine:
 
         assert len(hit.snippet) <= 40
         assert hit.snippet.endswith(TRUNCATION_MARKER)
+
+    def test_mode_defaults_to_configured_mode(
+        self, sample_index: Path, offline_settings: Settings
+    ) -> None:
+        dense = SearchEngine.open(sample_index, offline_settings)
+        hybrid_settings = offline_settings.model_copy(
+            update={"retrieval": RetrievalSettings(default_mode=SearchMode.HYBRID)}
+        )
+        hybrid = SearchEngine.open(sample_index, hybrid_settings)
+
+        assert dense.search("retry").mode is SearchMode.DENSE
+        assert hybrid.search("retry").mode is SearchMode.HYBRID
+        assert hybrid.search("retry", mode=SearchMode.BM25).mode is SearchMode.BM25
 
     def test_rejects_bad_requests(self, sample_index: Path, offline_settings: Settings) -> None:
         engine = SearchEngine.open(sample_index, offline_settings)

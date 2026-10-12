@@ -46,7 +46,6 @@ def test_index_then_query(
     tmp_path: Path, sample_repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("REPOLENS_EMBEDDING__BACKEND", "hashing")
-    monkeypatch.setenv("REPOLENS_RERANK__BACKEND", "none")
     out = tmp_path / "idx"
 
     indexed = runner.invoke(app, ["index", str(sample_repo), "--out", str(out)])
@@ -57,6 +56,7 @@ def test_index_then_query(
     assert queried.exit_code == 0, queried.output
     assert "minihttp/auth.py" in queried.stdout
     assert "parseAuthHeader" in queried.stdout
+    assert "(dense)" in queried.stdout  # default mode, no reranker configured
 
 
 def test_query_missing_index_fails_cleanly(tmp_path: Path) -> None:

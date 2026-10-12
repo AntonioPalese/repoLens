@@ -11,7 +11,8 @@ from repolens.config import Settings, load_settings
 def test_defaults_keep_remote_calls_disabled() -> None:
     settings = load_settings()
 
-    assert settings.rerank.backend == "cross_encoder"
+    assert settings.rerank.backend == "none"
+    assert settings.retrieval.default_mode == "dense"
     assert settings.rerank.llm_judge.configured is False
     assert settings.guard.classifier_enabled is False
 

@@ -25,6 +25,8 @@ from pydantic_settings import (
     TomlConfigSettingsSource,
 )
 
+from repolens.models import SearchMode
+
 DEFAULT_CONFIG_FILE = Path("repolens.toml")
 ENV_PREFIX = "REPOLENS_"
 
@@ -77,8 +79,13 @@ class EmbeddingSettings(_Section):
 
 
 class RetrievalSettings(_Section):
-    """First-stage retrieval and fusion parameters."""
+    """First-stage retrieval and fusion parameters.
 
+    ``default_mode`` is ``dense`` because it scored best among the fast configurations
+    on the httpx benchmark; ``hybrid`` pays off mainly as input to the LLM judge.
+    """
+
+    default_mode: SearchMode = SearchMode.DENSE
     candidate_k: int = Field(default=50, gt=0, description="Candidates per retriever.")
     bm25_k1: float = Field(default=1.5, ge=0)
     bm25_b: float = Field(default=0.75, ge=0, le=1)
@@ -106,9 +113,14 @@ class LLMJudgeSettings(_Section):
 
 
 class RerankSettings(_Section):
-    """Second-stage reranking."""
+    """Second-stage reranking, off by default.
 
-    backend: Literal["cross_encoder", "llm_judge", "none"] = "cross_encoder"
+    On the httpx benchmark the bundled cross-encoder (trained on web passages) made
+    ranking worse, while the LLM judge was much better but slow (~36 s per query);
+    enable it as an opt-in quality mode.
+    """
+
+    backend: Literal["cross_encoder", "llm_judge", "none"] = "none"
     cross_encoder_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     top_n: int = Field(default=30, gt=0, description="How many fused candidates to rerank.")
     device: str = "cpu"

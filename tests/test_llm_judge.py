@@ -8,7 +8,7 @@ from typing import Any, cast
 import pytest
 
 from repolens.config import LLMJudgeSettings, RerankSettings, Settings
-from repolens.models import Chunk, ChunkKind, ScoredChunk
+from repolens.models import Chunk, ChunkKind, ScoredChunk, SearchMode
 from repolens.rerank.base import ReportsUsage, Reranker
 from repolens.rerank.llm_judge import SYSTEM_PROMPT, LLMJudgeReranker, parse_scores
 from repolens.retrieval.pipeline import SearchEngine, build_llm_judge, build_reranker
@@ -175,7 +175,7 @@ def test_pipeline_records_llm_usage(sample_index: Path, offline_settings: Settin
     engine = SearchEngine(index, offline_settings, judge)
     tracer = Tracer()
 
-    result = engine.search("retry", k=2, tracer=tracer)
+    result = engine.search("retry", k=2, mode=SearchMode.HYBRID, tracer=tracer)
 
     assert result.reranked is True
     assert (tracer.tokens_in, tracer.tokens_out) == (1000, 50)

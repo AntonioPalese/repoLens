@@ -66,7 +66,7 @@ class SearchEngine:
         self,
         query: str,
         k: int = 8,
-        mode: SearchMode = SearchMode.HYBRID,
+        mode: SearchMode | None = None,
         rerank: bool = True,
         tracer: Tracer | None = None,
     ) -> SearchResult:
@@ -75,10 +75,12 @@ class SearchEngine:
         With reranking, the first stage fetches ``max(k, rerank.top_n)`` candidates and
         the reranker picks the final ``k``. ``rerank=True`` is a no-op when no reranker
         is configured; ``SearchResult.reranked`` reports what actually happened.
-        Stage timings and LLM usage are recorded on ``tracer`` when given.
+        ``mode=None`` uses ``retrieval.default_mode``. Stage timings and LLM usage are
+        recorded on ``tracer`` when given.
         """
         if k < 1:
             raise ValueError("k must be >= 1")
+        mode = mode if mode is not None else self._settings.retrieval.default_mode
         tracer = tracer if tracer is not None else Tracer()
         reranker = self._reranker if rerank else None
         depth = max(k, self._settings.rerank.top_n) if reranker else k

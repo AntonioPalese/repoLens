@@ -117,9 +117,15 @@ def index(
 def query(
     index_dir: IndexDirArg,
     question: Annotated[str, typer.Argument(help="Natural-language or identifier query.")],
-    mode: Annotated[SearchMode, typer.Option(help="Retrieval mode.")] = SearchMode.HYBRID,
+    mode: Annotated[
+        SearchMode | None,
+        typer.Option(help="Retrieval mode [default: retrieval.default_mode, i.e. dense]."),
+    ] = None,
     k: Annotated[int, typer.Option(min=1, help="Number of results.")] = 8,
-    rerank: Annotated[bool, typer.Option("--rerank/--no-rerank", help="Apply reranker.")] = True,
+    rerank: Annotated[
+        bool,
+        typer.Option("--rerank/--no-rerank", help="Apply the configured reranker, if any."),
+    ] = True,
     config: ConfigOption = None,
 ) -> None:
     """Search an index and pretty-print the results."""
