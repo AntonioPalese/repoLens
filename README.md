@@ -54,16 +54,21 @@ The current seed set has 30 questions on [httpx](https://github.com/encode/httpx
 | Config | Recall@1 | Recall@5 | Recall@10 | MRR@10 | nDCG@10 | Mean ms | p95 ms |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | bm25 | 0.406 | 0.617 | 0.689 | 0.564 | 0.555 | 0.1 | 0.1 |
-| dense | 0.556 | 0.700 | 0.828 | 0.733 | 0.721 | 10.0 | 10.6 |
-| hybrid | 0.539 | 0.739 | 0.756 | 0.721 | 0.687 | 10.4 | 11.0 |
-| hybrid + cross-encoder | 0.378 | 0.622 | 0.756 | 0.540 | 0.576 | 924.2 | 974.1 |
-| hybrid + LLM judge | not run yet (no endpoint configured) | | | | | | |
+| dense | 0.556 | 0.700 | 0.828 | 0.733 | 0.721 | 6.7 | 7.2 |
+| hybrid | 0.539 | 0.739 | 0.756 | 0.721 | 0.687 | 6.8 | 7.2 |
+| hybrid + cross-encoder | 0.378 | 0.622 | 0.756 | 0.540 | 0.576 | 855.1 | 968.6 |
+| hybrid + LLM judge | **0.667** | **0.889** | **0.906** | **0.894** | **0.865** | 36,439 | 39,527 |
 
-Produced by `repolens eval` on CPU; full report in
-[`evals/results/20261012T133306Z.json`](evals/results/20261012T133306Z.json).
-What these first numbers say, honestly:
+Produced by `repolens eval`. Retrieval and the cross-encoder ran on CPU. The LLM judge
+was `qwen3.8-flash-next-chat` on a local OpenAI-compatible server (DGX Spark),
+reranking the top 30 hybrid candidates in one call per query (~5.2k prompt tokens).
+Full report: [`evals/results/20261012T142533Z.json`](evals/results/20261012T142533Z.json).
+What these numbers say, honestly:
 
-* **Dense retrieval is currently the best configuration.** Fusing in BM25 helps
+* **The LLM judge is by far the best ranker** (MRR@10 0.894 vs 0.733 for dense),
+  especially on conceptual and cross-file questions. It is also ~36 s per query on
+  this hardware, so it suits offline or batch use, not interactive search.
+* **Dense retrieval is the best fast configuration.** Fusing in BM25 helps
   Recall@5 but hurts cross-file questions.
 * **The default cross-encoder (`ms-marco-MiniLM-L-6-v2`) makes ranking worse** and
   costs ~0.9 s per query on CPU. It was trained on web passages, not code.
